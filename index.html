@@ -1,1 +1,389 @@
-Hello World!
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>筋トレ記録アプリ Ver.8</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', 'Noto Sans JP', sans-serif;
+        }
+        .tab-active {
+            border-bottom-color: #3b82f6; /* blue-500 */
+            color: #3b82f6;
+        }
+        .custom-scrollbar::-webkit-scrollbar { width: 8px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #f1f1f1; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #9ca3af; }
+        #chart-type-selector input:checked + label { background-color: #3b82f6; color: white; border-color: #3b82f6; }
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        .spinner { border: 4px solid rgba(0, 0, 0, 0.1); border-left-color: #3b82f6; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800">
+
+    <div class="max-w-6xl mx-auto p-4 md:p-6">
+        <header class="mb-6">
+            <h1 class="text-3xl md:text-4xl font-bold text-gray-900">筋トレ記録アプリ</h1>
+        </header>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <!-- Left Column: Input Form & Session Log -->
+            <div class="lg:col-span-1 lg:sticky top-6 self-start space-y-6">
+                 <div class="bg-white p-6 rounded-xl shadow-md">
+                     <h2 class="text-2xl font-semibold mb-4">ワークアウトの日付</h2>
+                     <label for="session-date" class="block text-sm font-medium text-gray-700 mb-1">日付を選択</label>
+                     <input type="date" id="session-date" class="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500" required>
+                </div>
+                <div class="bg-white p-6 rounded-xl shadow-md">
+                    <h3 id="session-log-header" class="text-xl font-semibold mb-2"></h3>
+                    <div id="session-log-list" class="mb-4 custom-scrollbar"></div>
+                    <h3 class="text-xl font-semibold mb-4 border-t pt-4">種目を追加</h3>
+                    <form id="log-form" class="space-y-4">
+                        <div>
+                            <label for="exercise" class="block text-sm font-medium text-gray-700 mb-1">種目名</label>
+                            <input type="text" id="exercise" list="exercise-suggestions" placeholder="例: ベンチプレス" class="w-full p-2 border border-gray-300 rounded-md shadow-sm" required>
+                            <datalist id="exercise-suggestions"></datalist>
+                        </div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label for="weight" class="block text-sm font-medium text-gray-700 mb-1">重量 (kg)</label>
+                                <input type="number" id="weight" step="0.1" placeholder="例: 60" class="w-full p-2 border border-gray-300 rounded-md shadow-sm" required>
+                            </div>
+                            <div>
+                                <label for="reps" class="block text-sm font-medium text-gray-700 mb-1">回数</label>
+                                <input type="number" id="reps" placeholder="例: 10" class="w-full p-2 border border-gray-300 rounded-md shadow-sm" required>
+                            </div>
+                        </div>
+                        <button type="submit" class="w-full bg-blue-600 text-white font-bold py-3 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors">この種目を追加</button>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Right Column: Tabbed Content -->
+            <div class="lg:col-span-2">
+                <div class="bg-white rounded-xl shadow-md">
+                    <div class="border-b border-gray-200">
+                        <nav class="flex space-x-4 px-6" aria-label="Tabs">
+                            <button class="tab-btn tab-active" data-tab="notes">記録ノート</button>
+                            <button class="tab-btn" data-tab="calendar">月次カレンダー</button>
+                            <button class="tab-btn" data-tab="graph">成長グラフ</button>
+                            <button class="tab-btn" data-tab="ai_coach">AIコーチ</button>
+                        </nav>
+                        <style>.tab-btn { padding: 1rem 0.25rem; margin-right: 1.5rem; border-bottom: 2px solid transparent; font-weight: 600; color: #6b7280; } </style>
+                    </div>
+
+                    <!-- Tab Panels -->
+                    <div class="p-6">
+                        <div id="notes-panel" class="tab-panel space-y-6"></div>
+                        <div id="calendar-panel" class="tab-panel hidden"><div class="flex items-center justify-between mb-4"><button id="prev-month" class="p-2 rounded-full hover:bg-gray-100">&lt;</button><h3 id="calendar-header" class="text-xl font-semibold"></h3><button id="next-month" class="p-2 rounded-full hover:bg-gray-100">&gt;</button></div><div id="calendar-grid" class="grid grid-cols-7 gap-1 text-center"></div></div>
+                        <div id="graph-panel" class="tab-panel hidden"><div id="chart-type-selector" class="mb-4 flex justify-center border border-gray-200 rounded-lg p-1"><input type="radio" name="chartType" value="weight" id="chart-type-weight" class="hidden" checked><label for="chart-type-weight" class="flex-1 text-center py-2 px-4 rounded-md cursor-pointer transition-colors">重量</label><input type="radio" name="chartType" value="1rm" id="chart-type-1rm" class="hidden"><label for="chart-type-1rm" class="flex-1 text-center py-2 px-4 rounded-md cursor-pointer transition-colors">1RM換算</label><input type="radio" name="chartType" value="daily_total_volume" id="chart-type-volume" class="hidden"><label for="chart-type-volume" class="flex-1 text-center py-2 px-4 rounded-md cursor-pointer transition-colors">日の総重量</label></div><div id="exercise-select-container"><label for="exercise-select" class="block text-sm font-medium text-gray-700 mb-1">グラフを表示する種目:</label><select id="exercise-select" class="w-full p-2 border border-gray-300 rounded-md shadow-sm"><option value="">-- 種目を選択 --</option></select></div><div class="mt-4 h-80"><canvas id="progress-chart"></canvas></div></div>
+                        <div id="ai_coach-panel" class="tab-panel hidden text-center"><h2 class="text-2xl font-bold mb-4">AIコーチング</h2><p class="mb-6 text-gray-600">あなたのトレーニングデータを分析し、パーソナルアドバイスを提供します。</p><button id="get-advice-btn" class="bg-green-500 text-white font-bold py-3 px-6 rounded-md hover:bg-green-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors">アドバイスをもらう</button><div id="advice-output" class="mt-6 text-left"></div></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    // --- DOM Elements ---
+    const logForm = document.getElementById('log-form');
+    const sessionDateInput = document.getElementById('session-date');
+    const exerciseInput = document.getElementById('exercise');
+    const weightInput = document.getElementById('weight');
+    const repsInput = document.getElementById('reps');
+    const exerciseSelect = document.getElementById('exercise-select');
+    const exerciseSelectContainer = document.getElementById('exercise-select-container');
+    const chartCanvas = document.getElementById('progress-chart').getContext('2d');
+    const exerciseSuggestions = document.getElementById('exercise-suggestions');
+    const sessionLogList = document.getElementById('session-log-list');
+    const sessionLogHeader = document.getElementById('session-log-header');
+    const notesPanel = document.getElementById('notes-panel');
+    const calendarGrid = document.getElementById('calendar-grid');
+    const calendarHeader = document.getElementById('calendar-header');
+    const prevMonthBtn = document.getElementById('prev-month');
+    const nextMonthBtn = document.getElementById('next-month');
+    const tabButtons = document.querySelectorAll('.tab-btn');
+    const tabPanels = document.querySelectorAll('.tab-panel');
+    const chartTypeSelector = document.getElementById('chart-type-selector');
+    const getAdviceBtn = document.getElementById('get-advice-btn');
+    const adviceOutput = document.getElementById('advice-output');
+
+    // --- State ---
+    let workoutData = [];
+    let myChart;
+    let calendarDate = new Date();
+
+    // --- Utility Functions ---
+    const calculate1RM = (weight, reps) => {
+        if (!weight || !reps || reps < 1) return 0;
+        if (reps === 1) return weight;
+        return parseFloat(((weight * reps) / 40 + weight).toFixed(1));
+    };
+
+    // --- Data Persistence ---
+    const loadData = () => {
+        const savedData = localStorage.getItem('workoutTrackerDataV8');
+        workoutData = savedData ? JSON.parse(savedData) : [];
+    };
+    const saveData = () => {
+        localStorage.setItem('workoutTrackerDataV8', JSON.stringify(workoutData));
+    };
+    
+    // --- AI Coach Logic ---
+    const generateAICoachAdvice = () => {
+        adviceOutput.innerHTML = `<div class="flex justify-center items-center p-8"><div class="spinner"></div></div>`;
+
+        setTimeout(() => {
+            let adviceHTML = '';
+            const today = new Date();
+            const fourWeeksAgo = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 28);
+            
+            const recentData = workoutData.filter(log => new Date(log.date) >= fourWeeksAgo);
+
+            if (recentData.length < 10) {
+                adviceHTML = `<div class="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 rounded-md" role="alert"><p class="font-bold">データが不足しています</p><p>AIコーチングには、最低でも直近1ヶ月で10回以上のトレーニング記録が必要です。まずは記録を続けて、データを集めましょう！</p></div>`;
+                adviceOutput.innerHTML = adviceHTML;
+                return;
+            }
+
+            let positivePoints = [];
+            let improvementPoints = [];
+
+            // 1. トレーニング頻度の分析
+            const workoutDays = new Set(recentData.map(log => log.date)).size;
+            if (workoutDays >= 12) {
+                positivePoints.push(`<strong>トレーニング頻度:</strong> 直近1ヶ月で${workoutDays}日もトレーニングをしており、非常に素晴らしい継続力です！`);
+            } else if (workoutDays < 4) {
+                improvementPoints.push(`<strong>トレーニング頻度:</strong> 直近1ヶ月のトレーニングが${workoutDays}日と少なめです。まずは週に1〜2回のペースを目標にしてみましょう。`);
+            }
+
+            // 2. 種目ごとの成長分析
+            const uniqueExercises = [...new Set(recentData.map(log => log.exercise))];
+            uniqueExercises.forEach(ex => {
+                const exerciseData = recentData.filter(log => log.exercise === ex).sort((a, b) => new Date(a.date) - new Date(b.date));
+                if (exerciseData.length < 3) return;
+
+                const firstHalfData = exerciseData.slice(0, Math.floor(exerciseData.length / 2));
+                const secondHalfData = exerciseData.slice(Math.floor(exerciseData.length / 2));
+
+                const firstHalfAvg1RM = firstHalfData.reduce((sum, log) => sum + calculate1RM(log.weight, log.reps), 0) / firstHalfData.length;
+                const secondHalfAvg1RM = secondHalfData.reduce((sum, log) => sum + calculate1RM(log.weight, log.reps), 0) / secondHalfData.length;
+
+                if (secondHalfAvg1RM > firstHalfAvg1RM * 1.02) {
+                    positivePoints.push(`<strong>${ex}の成長:</strong> 1RM換算値が順調に向上しています。素晴らしい進歩です！`);
+                } else if (secondHalfAvg1RM < firstHalfAvg1RM * 0.98) {
+                    improvementPoints.push(`<strong>${ex}の停滞:</strong> 1RM換算値が少し停滞または後退気味です。セット数を変更したり、インターバルを調整するなど、トレーニングに変化を加えてみてはいかがでしょうか？`);
+                }
+            });
+
+            // 3. 総ボリュームの分析
+            const totalVolume = recentData.reduce((sum, log) => sum + log.weight * log.reps, 0);
+            positivePoints.push(`<strong>総ボリューム:</strong> この1ヶ月で合計<strong>${totalVolume.toLocaleString()}kg</strong>もの重量を持ち上げました。素晴らしい努力です！`);
+
+            // HTMLの生成
+            adviceHTML = `<h3 class="text-xl font-bold text-green-600 mb-2">素晴らしい点 🏆</h3><ul class="list-disc list-inside space-y-2 bg-green-50 p-4 rounded-md mb-6">`;
+            if (positivePoints.length > 0) {
+                positivePoints.forEach(p => { adviceHTML += `<li>${p}</li>`; });
+            } else {
+                adviceHTML += `<li>記録を続けて、あなたの強みを見つけましょう！</li>`;
+            }
+            adviceHTML += `</ul>`;
+
+            adviceHTML += `<h3 class="text-xl font-bold text-orange-600 mb-2">アドバイス 💡</h3><ul class="list-disc list-inside space-y-2 bg-orange-50 p-4 rounded-md">`;
+            if (improvementPoints.length > 0) {
+                improvementPoints.forEach(p => { adviceHTML += `<li>${p}</li>`; });
+            } else {
+                adviceHTML += `<li>今のところ大きな課題は見当たりません。この調子で頑張りましょう！</li>`;
+            }
+            adviceHTML += `</ul>`;
+
+            adviceOutput.innerHTML = adviceHTML;
+
+        }, 1500); // 1.5秒の遅延でAIが考えている感を演出
+    };
+
+
+    // --- Rendering ---
+    const renderAll = () => {
+        renderSessionLog();
+        renderLogNotes();
+        renderCalendar();
+        updateExerciseSelect();
+        updateExerciseDatalist();
+        updateChart();
+    };
+
+    const updateExerciseDatalist = () => {
+        exerciseSuggestions.innerHTML = '';
+        const uniqueExercises = [...new Set(workoutData.map(log => log.exercise))].sort();
+        uniqueExercises.forEach(ex => {
+            exerciseSuggestions.innerHTML += `<option value="${ex}">${ex}</option>`;
+        });
+    };
+    
+    const renderSessionLog = () => {
+        const selectedDate = sessionDateInput.value;
+        sessionLogHeader.textContent = `${selectedDate} の記録`;
+        const logsOnDate = workoutData.filter(log => log.date === selectedDate);
+        sessionLogList.innerHTML = '';
+        let dailyTotalVolume = 0;
+        if (logsOnDate.length === 0) {
+            sessionLogList.innerHTML = `<p class="text-center text-gray-500 py-4">この日の記録はありません。</p>`; return;
+        }
+        const table = document.createElement('table');
+        table.className = 'w-full text-sm';
+        table.innerHTML = `<thead class="text-xs text-gray-500"><tr><th class="py-2 pr-2 text-left">種目</th><th class="py-2 px-2 text-right">記録</th><th class="py-2 px-2 text-right">Volume</th><th class="py-2 px-2 text-right">1RM(換算)</th><th></th></tr></thead>`;
+        let tbodyHTML = '';
+        logsOnDate.forEach(log => {
+            const volume = log.weight * log.reps;
+            dailyTotalVolume += volume;
+            tbodyHTML += `<tr class="border-b border-gray-200"><td class="py-2 pr-2 font-medium">${log.exercise}</td><td class="py-2 px-2 text-right">${log.weight}kg&times;${log.reps}</td><td class="py-2 px-2 text-right">${volume} kg</td><td class="py-2 px-2 text-right">${calculate1RM(log.weight, log.reps)} kg</td><td class="py-2 pl-2 text-right"><button data-id="${log.id}" class="delete-btn text-red-500 hover:text-red-700 font-bold">&times;</button></td></tr>`;
+        });
+        table.innerHTML += `<tbody>${tbodyHTML}</tbody>`;
+        sessionLogList.appendChild(table);
+        const summary = document.createElement('div');
+        summary.className = 'mt-4 text-right font-bold text-lg';
+        summary.innerHTML = `一日の総重量: <span class="text-blue-600">${dailyTotalVolume.toLocaleString()} kg</span>`;
+        sessionLogList.appendChild(summary);
+    };
+
+    const renderLogNotes = () => {
+        notesPanel.innerHTML = '';
+        const sortedData = [...workoutData].sort((a, b) => new Date(b.date) - new Date(a.date));
+        const groupedByDate = sortedData.reduce((acc, log) => { (acc[log.date] = acc[log.date] || []).push(log); return acc; }, {});
+        if (Object.keys(groupedByDate).length === 0) {
+            notesPanel.innerHTML = `<p class="text-center text-gray-500 py-8">まだ記録がありません。</p>`; return;
+        }
+        for (const date in groupedByDate) {
+            const logsOnDate = groupedByDate[date];
+            const dailyTotalVolume = logsOnDate.reduce((sum, log) => sum + (log.weight * log.reps), 0);
+            const card = document.createElement('div');
+            card.className = 'bg-gray-50 p-4 rounded-lg';
+            card.id = `note-${date}`;
+            card.innerHTML = `<h3 class="font-bold text-lg mb-2 flex justify-between items-baseline"><span>${date}</span><span class="font-normal text-base text-gray-600">総重量: ${dailyTotalVolume.toLocaleString()} kg</span></h3>`;
+            const table = document.createElement('table');
+            table.className = 'w-full text-sm';
+            table.innerHTML = `<thead class="text-xs text-gray-500"><tr><th class="py-1 pr-2 text-left">種目</th><th class="py-1 px-2 text-right">重量</th><th class="py-1 px-2 text-right">回数</th><th class="py-1 px-2 text-right">Volume</th><th class="py-1 pl-2 text-right">1RM(換算)</th></tr></thead>`;
+            let tbodyHTML = '';
+            logsOnDate.forEach(log => {
+                tbodyHTML += `<tr class="border-b border-gray-200 last:border-b-0"><td class="py-2 pr-2">${log.exercise}</td><td class="py-2 px-2 text-right">${log.weight} kg</td><td class="py-2 px-2 text-right">${log.reps} 回</td><td class="py-2 px-2 text-right">${log.weight * log.reps} kg</td><td class="py-2 pl-2 text-right">${calculate1RM(log.weight, log.reps)} kg</td></tr>`;
+            });
+            table.innerHTML += `<tbody>${tbodyHTML}</tbody>`;
+            card.appendChild(table);
+            notesPanel.appendChild(card);
+        }
+    };
+    
+    const renderCalendar = () => {
+        calendarGrid.innerHTML = '';
+        calendarHeader.textContent = `${calendarDate.getFullYear()}年 ${calendarDate.getMonth() + 1}月`;
+        const year = calendarDate.getFullYear();
+        const month = calendarDate.getMonth();
+        ['日', '月', '火', '水', '木', '金', '土'].forEach(day => { calendarGrid.innerHTML += `<div class="font-bold text-xs text-gray-600 py-2">${day}</div>`; });
+        const firstDay = new Date(year, month, 1).getDay();
+        const daysInMonth = new Date(year, month + 1, 0).getDate();
+        for (let i = 0; i < firstDay; i++) calendarGrid.innerHTML += `<div></div>`;
+        const logsByDate = workoutData.reduce((acc, log) => { (acc[log.date] = acc[log.date] || []).push(log); return acc; }, {});
+        for (let day = 1; day <= daysInMonth; day++) {
+            const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+            const dailyLogs = logsByDate[dateStr];
+            const hasWorkout = dailyLogs && dailyLogs.length > 0;
+            const isToday = new Date().toDateString() === new Date(year, month, day).toDateString();
+            let classes = "flex flex-col items-center justify-center p-1 rounded-lg cursor-pointer h-16 hover:bg-gray-200";
+            if (isToday) classes += " ring-2 ring-blue-500";
+            let content = `<span class="text-sm">${day}</span>`;
+            if (hasWorkout) {
+                const dailyVolume = dailyLogs.reduce((sum, log) => sum + (log.weight * log.reps), 0);
+                classes += " bg-blue-50";
+                content += `<span class="text-xs text-blue-700 font-semibold mt-1">${(dailyVolume/1000).toFixed(1)}t</span>`;
+            }
+            calendarGrid.innerHTML += `<div class="${classes}" data-date="${dateStr}">${content}</div>`;
+        }
+    };
+
+    const updateExerciseSelect = () => {
+        const uniqueExercises = [...new Set(workoutData.map(log => log.exercise))].sort();
+        const currentSelection = exerciseSelect.value;
+        exerciseSelect.innerHTML = '<option value="">-- 種目を選択 --</option>';
+        uniqueExercises.forEach(ex => { exerciseSelect.innerHTML += `<option value="${ex}">${ex}</option>`; });
+        exerciseSelect.value = uniqueExercises.includes(currentSelection) ? currentSelection : "";
+    };
+
+    const updateChart = () => {
+        const chartType = document.querySelector('input[name="chartType"]:checked').value;
+        const selectedExercise = exerciseSelect.value;
+        exerciseSelectContainer.style.display = chartType === 'daily_total_volume' ? 'none' : 'block';
+        if (chartType !== 'daily_total_volume' && !selectedExercise) {
+            if (myChart) myChart.destroy(); myChart = null; return;
+        }
+        const sortedData = [...workoutData].sort((a, b) => new Date(a.date) - new Date(b.date));
+        let labels = [], dataPoints = [], chartLabel = '', yAxisLabel = 'kg';
+        switch (chartType) {
+            case 'weight':
+                chartLabel = `"${selectedExercise}" の重量推移`; yAxisLabel = '重量 (kg)';
+                const weightData = sortedData.filter(log => log.exercise === selectedExercise);
+                labels = weightData.map(log => log.date); dataPoints = weightData.map(log => log.weight); break;
+            case '1rm':
+                chartLabel = `"${selectedExercise}" の1RM換算値推移`; yAxisLabel = '1RM換算値 (kg)';
+                const rmData = sortedData.filter(log => log.exercise === selectedExercise);
+                labels = rmData.map(log => log.date); dataPoints = rmData.map(log => calculate1RM(log.weight, log.reps)); break;
+            case 'daily_total_volume':
+                chartLabel = '日の総重量推移'; yAxisLabel = '総重量 (kg)';
+                const volumeByDate = sortedData.reduce((acc, log) => { acc[log.date] = (acc[log.date] || 0) + (log.weight * log.reps); return acc; }, {});
+                labels = Object.keys(volumeByDate); dataPoints = Object.values(volumeByDate); break;
+        }
+        if (myChart) myChart.destroy();
+        myChart = new Chart(chartCanvas, {
+            type: 'line',
+            data: { labels: labels, datasets: [{ label: chartLabel, data: dataPoints, borderColor: '#3b82f6', backgroundColor: 'rgba(59, 130, 246, 0.1)', fill: true, tension: 0.1 }] },
+            options: { responsive: true, maintainAspectRatio: false, scales: { y: { title: { display: true, text: yAxisLabel } } } }
+        });
+    };
+    
+    // --- Event Handlers ---
+    const handleDelete = (logId) => { if (confirm('この記録を削除しますか？')) { workoutData = workoutData.filter(log => log.id !== logId); saveData(); renderAll(); } };
+    logForm.addEventListener('submit', (e) => { e.preventDefault(); const newLog = { id: Date.now(), date: sessionDateInput.value, exercise: exerciseInput.value.trim(), weight: parseFloat(weightInput.value), reps: parseInt(repsInput.value) }; workoutData.push(newLog); saveData(); renderAll(); exerciseInput.value = ''; weightInput.value = ''; repsInput.value = ''; exerciseInput.focus(); });
+    sessionDateInput.addEventListener('change', renderAll);
+    sessionLogList.addEventListener('click', (e) => { if (e.target.classList.contains('delete-btn')) handleDelete(parseInt(e.target.dataset.id)); });
+    tabButtons.forEach(button => button.addEventListener('click', () => {
+        tabButtons.forEach(btn => btn.classList.remove('tab-active'));
+        button.classList.add('tab-active');
+        tabPanels.forEach(panel => panel.classList.add('hidden'));
+        document.getElementById(`${button.dataset.tab}-panel`).classList.remove('hidden');
+    }));
+    prevMonthBtn.addEventListener('click', () => { calendarDate.setMonth(calendarDate.getMonth() - 1); renderCalendar(); });
+    nextMonthBtn.addEventListener('click', () => { calendarDate.setMonth(calendarDate.getMonth() + 1); renderCalendar(); });
+    calendarGrid.addEventListener('click', (e) => {
+        const dateCell = e.target.closest('[data-date]');
+        if (dateCell) {
+            const date = dateCell.dataset.date;
+            sessionDateInput.value = date;
+            renderAll();
+            document.querySelector('.tab-btn[data-tab="notes"]').click();
+            setTimeout(() => {
+                const noteElement = document.getElementById(`note-${date}`);
+                if (noteElement) { noteElement.scrollIntoView({ behavior: 'smooth', block: 'center' }); noteElement.classList.add('bg-yellow-100'); setTimeout(() => noteElement.classList.remove('bg-yellow-100'), 1500); }
+            }, 0);
+        }
+    });
+    chartTypeSelector.addEventListener('change', updateChart);
+    exerciseSelect.addEventListener('change', updateChart);
+    getAdviceBtn.addEventListener('click', generateAICoachAdvice);
+
+    // --- Initialization ---
+    const initializeApp = () => {
+        sessionDateInput.value = new Date().toISOString().split('T')[0];
+        loadData();
+        renderAll();
+    };
+    initializeApp();
+});
+</script>
+</body>
+</html>
